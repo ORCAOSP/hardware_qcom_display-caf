@@ -33,9 +33,7 @@
 #define ALIGN_TO(x, align)     (((x) + ((align)-1)) & ~((align)-1))
 #define LIKELY( exp )       (__builtin_expect( (exp) != 0, true  ))
 #define UNLIKELY( exp )     (__builtin_expect( (exp) != 0, false ))
-#define FINAL_TRANSFORM_MASK 0x000F
-#define MAX_NUM_DISPLAYS 4 //Yes, this is ambitious
-#define MAX_NUM_LAYERS 32
+#define MAX_NUM_LAYERS 32 //includes fb layer
 #define MAX_DISPLAY_DIM 2048
 
 // For support of virtual displays
@@ -128,6 +126,36 @@ class LayerCache {
 
 };
 
+class LayerRotMap {
+public:
+    LayerRotMap() { reset(); }
+    enum { MAX_SESS = 3 };
+    void add(hwc_layer_1_t* layer, overlay::Rotator *rot);
+    void reset();
+    uint32_t getCount() const;
+    hwc_layer_1_t* getLayer(uint32_t index) const;
+    overlay::Rotator* getRot(uint32_t index) const;
+    void setReleaseFd(const int& fence);
+private:
+    hwc_layer_1_t* mLayer[MAX_SESS];
+    overlay::Rotator* mRot[MAX_SESS];
+    uint32_t mCount;
+};
+
+inline uint32_t LayerRotMap::getCount() const {
+    return mCount;
+}
+
+inline hwc_layer_1_t* LayerRotMap::getLayer(uint32_t index) const {
+    if(index >= mCount) return NULL;
+    return mLayer[index];
+}
+
+inline overlay::Rotator* LayerRotMap::getRot(uint32_t index) const {
+    if(index >= mCount) return NULL;
+    return mRot[index];
+}
+
 // -----------------------------------------------------------------------------
 // Utility functions - implemented in hwc_utils.cpp
 void dumpLayer(hwc_layer_1_t const* l);
@@ -145,6 +173,7 @@ bool isSecureModePolicy(int mdpVersion);
 bool isExternalActive(hwc_context_t* ctx);
 bool needsScaling(hwc_layer_1_t const* layer);
 bool isAlphaPresent(hwc_layer_1_t const* layer);
+bool setupBasePipe(hwc_context_t *ctx);
 int hwc_vsync_control(hwc_context_t* ctx, int dpy, int enable);
 
 //Helper function to dump logs
@@ -283,6 +312,7 @@ struct hwc_context_t {
     qhwc::LayerCache *mLayerCache[MAX_DISPLAYS];
     qhwc::LayerProp *layerProp[MAX_DISPLAYS];
     qhwc::MDPComp *mMDPComp;
+    qhwc::LayerRotMap *mLayerRotMap[MAX_DISPLAYS];
 
     //Securing in progress indicator
     bool mSecuring;
@@ -292,12 +322,16 @@ struct hwc_context_t {
     bool mSecureMode;
     //Lock to prevent set from being called while blanking
     mutable Locker mBlankLock;
-    //Lock to protect set when detaching external disp
-    mutable Locker mExtSetLock;
+    //Lock to protect prepare & set when detaching external disp
+    mutable Locker mExtLock;
     //Vsync
     struct vsync_state vstate;
     //DMA used for rotator
     bool mDMAInUse;
+    //MDP rotater needed
+    bool mNeedsRotator;
+    //Check if base pipe is set up
+    bool mBasePipeSetup;
 };
 
 namespace qhwc {
