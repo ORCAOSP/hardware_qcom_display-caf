@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -164,6 +164,7 @@ int gralloc_register_buffer(gralloc_module_t const* module,
         ALOGE("%s: gralloc_map failed", __FUNCTION__);
         return err;
     }
+
 #ifndef QCOM_BSP
     // Reset the genlock private fd flag in the handle
     hnd->genlockPrivFd = -1;

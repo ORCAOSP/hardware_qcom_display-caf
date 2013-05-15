@@ -142,12 +142,7 @@ inline bool OvMem::open(uint32_t numbufs,
     //see if we can fallback to other heap
     //we can try MM_HEAP once if it's not secure playback
     if (err != 0 && !isSecure) {
-        if(qdutils::MDPVersion::getInstance().getMDPVersion() >
-                                qdutils::MDP_V4_0) {
-            allocFlags |= GRALLOC_USAGE_PRIVATE_MM_HEAP;
-        } else {
-            allocFlags = GRALLOC_USAGE_PRIVATE_CAMERA_HEAP;
-        }
+        allocFlags |= GRALLOC_USAGE_PRIVATE_MM_HEAP;
         err = mAlloc->allocate(data, allocFlags);
         if (err != 0) {
             ALOGE(" could not allocate from fallback heap");

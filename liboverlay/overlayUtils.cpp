@@ -28,6 +28,7 @@
 */
 
 #include <stdlib.h>
+#include <math.h>
 #include <utils/Log.h>
 #include <linux/msm_mdp.h>
 #include <cutils/properties.h>
@@ -35,9 +36,6 @@
 #include "overlayUtils.h"
 #include "mdpWrapper.h"
 #include "mdp_version.h"
-
-#define MDP4_REV40_UP_SCALING_MAX 8
-#define MDP4_REV41_OR_LATER_UP_SCALING_MAX 20
 
 // just a helper static thingy
 namespace {
@@ -86,58 +84,6 @@ const char* const Res::barrierFile =
 
 
 namespace utils {
-//------------------ defines -----------------------------
-#define FB_DEVICE_TEMPLATE "/dev/graphics/fb%u"
-#define NUM_FB_DEVICES 3
-
-//--------------------------------------------------------
-
-/* clears any VG pipes allocated to the fb devices */
-int initOverlay() {
-    int mdpVersion = qdutils::MDPVersion::getInstance().getMDPVersion();
-    if (mdpVersion < qdutils::MDSS_V5) {
-        msmfb_mixer_info_req  req;
-        mdp_mixer_info *minfo = NULL;
-        char name[64];
-        int fd = -1;
-        for(int i = 0; i < NUM_FB_DEVICES; i++) {
-            snprintf(name, 64, FB_DEVICE_TEMPLATE, i);
-            ALOGD("initoverlay:: opening the device:: %s", name);
-            fd = ::open(name, O_RDWR, 0);
-            if(fd < 0) {
-                ALOGE("cannot open framebuffer(%d)", i);
-                return -1;
-            }
-            //Get the mixer configuration */
-            req.mixer_num = i;
-            if (ioctl(fd, MSMFB_MIXER_INFO, &req) == -1) {
-                ALOGE("ERROR: MSMFB_MIXER_INFO ioctl failed");
-                close(fd);
-                return -1;
-            }
-            minfo = req.info;
-            for (int j = 0; j < req.cnt; j++) {
-                ALOGD("ndx=%d num=%d z_order=%d", minfo->pndx, minfo->pnum,
-                      minfo->z_order);
-                // except the RGB base layer with z_order of -1, clear any
-                // other pipes connected to mixer.
-                if((minfo->z_order) != -1) {
-                    int index = minfo->pndx;
-                    ALOGD("Unset overlay with index: %d at mixer %d", index, i);
-                    if(ioctl(fd, MSMFB_OVERLAY_UNSET, &index) == -1) {
-                        ALOGE("ERROR: MSMFB_OVERLAY_UNSET failed");
-                        close(fd);
-                        return -1;
-                    }
-                }
-                minfo++;
-            }
-            close(fd);
-            fd = -1;
-        }
-    }
-    return 0;
-}
 
 //--------------------------------------------------------
 //Refer to graphics.h, gralloc_priv.h, msm_mdp.h
@@ -234,14 +180,6 @@ int getHALFormat(int mdpFormat) {
     return -1;
 }
 
-int getOverlayMagnificationLimit()
-{
-    if(qdutils::MDPVersion::getInstance().getMDPVersion() > 400)
-       return MDP4_REV41_OR_LATER_UP_SCALING_MAX;
-    else
-       return MDP4_REV40_UP_SCALING_MAX;
-}
-
 int getDownscaleFactor(const int& src_w, const int& src_h,
         const int& dst_w, const int& dst_h) {
     int dscale_factor = utils::ROT_DS_NONE;
@@ -252,7 +190,15 @@ int getDownscaleFactor(const int& src_w, const int& src_h,
     // Use-case: Video playback [with downscaling and rotation].
     if (dst_w && dst_h)
     {
-        uint32_t dscale = (src_w * src_h) / (dst_w * dst_h);
+        float fDscale =  (float)(src_w * src_h) / (float)(dst_w * dst_h);
+
+        // On our MTP 1080p playback case downscale after sqrt is coming to 1.87
+        // we were rounding to 1. So entirely MDP has to do the downscaling.
+        // BW requirement and clock requirement is high across MDP4 targets.
+        // It is unable to downscale 1080p video to panel resolution on 8960.
+        // round(x) will round it to nearest integer and avoids above issue.
+        uint32_t dscale = round(sqrtf(fDscale));
+
         if(dscale < 2) {
             // Down-scale to > 50% of orig.
             dscale_factor = utils::ROT_DS_NONE;
@@ -374,11 +320,6 @@ uint32_t getS3DFormat(uint32_t fmt) {
         }
     }
     return fmt3D;
-}
-
-bool isMdssRotator() {
-    int mdpVersion = qdutils::MDPVersion::getInstance().getMDPVersion();
-    return (mdpVersion >= qdutils::MDSS_V5);
 }
 
 void getDump(char *buf, size_t len, const char *prefix,

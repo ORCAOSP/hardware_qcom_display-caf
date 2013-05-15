@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2010 The Android Open Source Project
- * Copyright (c) 2011-2012 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2013 The Linux Foundation. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,8 +29,8 @@
 #include "gpu.h"
 #include "memalloc.h"
 #include "alloc_controller.h"
-#include "mdp_version.h"
 #include <qdMetaData.h>
+#include "mdp_version.h"
 
 using namespace gralloc;
 
@@ -208,6 +208,7 @@ int gpu_context_t::alloc_impl(int w, int h, int format, int usage,
     if (err < 0) {
         return err;
     }
+
 #ifndef QCOM_BSP
     // Create a genlock lock for this buffer handle.
     err = genlock_create_lock((native_handle_t*)(*pHandle));
@@ -231,7 +232,6 @@ int gpu_context_t::free_impl(private_handle_t const* hnd) {
                                     hnd->offset, hnd->fd);
     if(err)
         return err;
-
 #ifdef QCOM_BSP
     // free the metadata space
     unsigned long size = ROUND_UP_PAGESIZE(sizeof(MetaData_t));
